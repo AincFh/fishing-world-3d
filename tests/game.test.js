@@ -12,3 +12,13 @@ test('equipment selection requires ownership',()=>{const s=newGame();assert.equa
 test('save input sanitization blocks negatives, unknown items and invalid records',()=>{const s=sanitize({coins:-1,owned:['ghost'],records:{bluegill:999},zone:'alpine',sound:false});assert.equal(s.coins,160);assert.deepEqual(s.owned,['starter','worm']);assert.equal(s.zone,'willow');assert.equal(s.sound,false);assert.equal(s.records.bluegill,undefined)});
 test('fight mechanic supports catch, break and stamina recovery',()=>{let f=initialFight();for(let i=0;i<800&&!f.result;i++)f=fightStep(f,i%10<3,.05,2.6,.7);assert.equal(f.result,'caught');f=initialFight();for(let i=0;i<200&&!f.result;i++)f=fightStep(f,true,.1,1,2);assert.equal(f.result,'snap');assert.equal(fightStep(initialFight(),false,.1).tension<.2,true)});
 test('number formatting',()=>assert.equal(formatCoins(1234567),'1,234,567'));
+test('target casting is bounded to actual lake, excludes dock and invalid input',async()=>{
+ const {isCastTargetValid}=await import('../src/logic.js');
+ assert.equal(isCastTargetValid(0,7),true);
+ assert.equal(isCastTargetValid(15,-15),true);
+ assert.equal(isCastTargetValid(0,0),false);
+ assert.equal(isCastTargetValid(41,0),false);
+ assert.equal(isCastTargetValid(0,35),false);
+ assert.equal(isCastTargetValid(NaN,0),false);
+ assert.equal(isCastTargetValid(Infinity,1),false);
+});

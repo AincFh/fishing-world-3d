@@ -1,4 +1,7 @@
 export const VERSION=1;
+export function isCastTargetValid(x,z){
+ return Number.isFinite(x)&&Number.isFinite(z)&&Math.hypot(x,z)>1&&Math.hypot(x,z)<40&&!(Math.abs(x)<3&&z>28);
+}
 export const ZONES=[
 {id:'willow',name:'柳湾湖',level:1,detail:'晨雾、荷叶与安静的浅滩',color:'#5ac8bc'},
 {id:'pine',name:'松林溪谷',level:3,detail:'冷泉与岩壁，适合中级垂钓',color:'#8bcfc2'},
