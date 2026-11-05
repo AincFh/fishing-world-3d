@@ -1,4 +1,5 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js';
+import {isCastTargetValid} from './logic.js';
 const random=(()=>{let s=20261105;return()=>{s=(1664525*s+1013904223)>>>0;return s/4294967296;}})();
 const range=(a,b)=>a+(b-a)*random();
 const palette={
@@ -70,21 +71,43 @@ export function createWorld(canvas){
  const ripples=[];function ripple(x,z){const ring=new THREE.Mesh(new THREE.RingGeometry(.36,.44,32),new THREE.MeshBasicMaterial({color:0xddf7ec,transparent:true,opacity:.63,side:THREE.DoubleSide,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.set(x,.16,z);scene.add(ring);ripples.push({mesh:ring,age:0});}
  let target=new THREE.Vector3(0,.25,7),castAt=-1,phase='idle',weather='clear',zone='willow',time=0,camYaw=.48,camPitch=.3,camDist=42,fighting=0,drag=null,moving=false,muted=false;
  const focus=new THREE.Vector3(0,1,15);
+ const aimPoint=new THREE.Vector3(0,.25,7);
+ const aimPlane=new THREE.Plane(new THREE.Vector3(0,1,0),-.25);
+ const aimRaycaster=new THREE.Raycaster();
+ const marker=new THREE.Mesh(new THREE.RingGeometry(.62,.79,48),new THREE.MeshBasicMaterial({color:0xffe8b0,transparent:true,opacity:.72,side:THREE.DoubleSide,depthWrite:false}));
+ marker.rotation.x=-Math.PI/2;marker.position.set(0,.18,7);marker.visible=true;scene.add(marker);
+ function aimAt(clientX,clientY){
+  if(phase!=='idle')return false;
+  const b=canvas.getBoundingClientRect();
+  if(!b.width||!b.height)return false;
+  const screen=new THREE.Vector2((clientX-b.left)/b.width*2-1,-((clientY-b.top)/b.height*2-1));
+  aimRaycaster.setFromCamera(screen,camera);
+  const point=new THREE.Vector3();
+  const valid=aimRaycaster.ray.intersectPlane(aimPlane,point)&&isCastTargetValid(point.x,point.z);
+  if(!valid){
+   canvas.dispatchEvent(new CustomEvent('fishing:aim-error',{detail:{reason:'outside-water'}}));
+   return false;
+  }
+  aimPoint.set(point.x,.25,point.z);
+  marker.position.set(point.x,.18,point.z);marker.visible=true;
+  canvas.dispatchEvent(new CustomEvent('fishing:aim',{detail:{x:point.x,z:point.z,distance:Math.hypot(point.x,point.z).toFixed(1)}}));
+  return true;
+ }
  function resize(){const w=window.innerWidth,h=window.innerHeight;camera.aspect=w/Math.max(h,1);camera.updateProjectionMatrix();renderer.setSize(w,h,false);}
  function cameraMove(){const z=camDist*Math.cos(camPitch),y=camDist*Math.sin(camPitch);camera.position.set(focus.x+Math.sin(camYaw)*z,focus.y+y,focus.z+Math.cos(camYaw)*z);camera.lookAt(focus);}
  canvas.addEventListener('pointerdown',e=>{if(e.button&&e.pointerType==='mouse')return;drag={x:e.clientX,y:e.clientY,yaw:camYaw,pitch:camPitch};moving=false;canvas.setPointerCapture(e.pointerId)});
  canvas.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag.x,dy=e.clientY-drag.y;if(Math.abs(dx)+Math.abs(dy)>5)moving=true;camYaw=drag.yaw-dx*.0045;camPitch=Math.max(.17,Math.min(.95,drag.pitch+dy*.0035));cameraMove()});
- canvas.addEventListener('pointerup',()=>{drag=null});canvas.addEventListener('pointercancel',()=>drag=null);canvas.addEventListener('wheel',e=>{camDist=Math.max(25,Math.min(78,camDist+Math.sign(e.deltaY)*3));cameraMove()},{passive:true});
- function cast(){const x=range(-12,12),z=range(-12,14);target.set(x,.25,z);castAt=time;phase='casting';bobberGroup.visible=true;line.visible=true;bobberGroup.position.copy(tipRod);ripple(x,z);}
+ canvas.addEventListener('pointerup',e=>{if(drag&&!moving)aimAt(e.clientX,e.clientY);drag=null});canvas.addEventListener('pointercancel',()=>drag=null);canvas.addEventListener('wheel',e=>{camDist=Math.max(25,Math.min(78,camDist+Math.sign(e.deltaY)*3));cameraMove()},{passive:true});
+ function cast(){target.copy(aimPoint);marker.visible=false;castAt=time;phase='casting';bobberGroup.visible=true;line.visible=true;bobberGroup.position.copy(tipRod);ripple(target.x,target.z);}
  function updateLine(){const ar=lineGeo.attributes.position;ar.setXYZ(0,tipRod.x,tipRod.y,tipRod.z);ar.setXYZ(1,bobberGroup.position.x,bobberGroup.position.y,bobberGroup.position.z);ar.needsUpdate=true;}
- function reset(){phase='idle';bobberGroup.visible=false;line.visible=false;}
+ function reset(){phase='idle';bobberGroup.visible=false;line.visible=false;marker.visible=true;}
  function setPhase(value){phase=value;if(value==='bite')ripple(target.x,target.z);}
- function setZone(id){zone=id;const p=palette[id]||palette.willow;scene.background.setHex(p.sky);scene.fog.color.setHex(p.fog);groundMat.color.setHex(p.grass);waterUniforms.uTint.value.set(...p.water);sun.color.setHex(p.sun);if(id==='dusk')sun.intensity=1.8;else sun.intensity=2.65;}
+ function setZone(id){zone=id;aimPoint.set(0,.25,7);marker.position.set(0,.18,7);marker.visible=true;const p=palette[id]||palette.willow;scene.background.setHex(p.sky);scene.fog.color.setHex(p.fog);groundMat.color.setHex(p.grass);waterUniforms.uTint.value.set(...p.water);sun.color.setHex(p.sun);if(id==='dusk')sun.intensity=1.8;else sun.intensity=2.65;}
  function setWeather(v){weather=v;rain.visible=v==='rain';sun.intensity=v==='rain'?1.35:zone==='dusk'?1.8:2.65;hemi.intensity=v==='rain'?1.35:2.05;}
  function showCatch(){for(let i=0;i<4;i++)ripple(target.x+range(-1.4,1.4),target.z+range(-1.4,1.4));}
  function setFight(p,t){fighting=p;if(t>.85&&Math.floor(time*5)%2===0)ripple(target.x,target.z);}
  let last=0,disposed=false;
- function animate(stamp){if(disposed)return;requestAnimationFrame(animate);const dt=Math.min(.065,(stamp-last)/1000||.016);last=stamp;time+=dt;waterUniforms.uTime.value=time;
+ function animate(stamp){if(disposed)return;requestAnimationFrame(animate);const dt=Math.min(.065,(stamp-last)/1000||.016);last=stamp;time+=dt;waterUniforms.uTime.value=time;if(marker.visible){marker.material.opacity=.6+.2*Math.sin(time*2);marker.scale.setScalar(1+.07*Math.sin(time*2));}
  for(const f of fish){f.dir+=Math.sin(time*.26+f.offset)*dt*.22;f.group.position.x+=Math.cos(f.dir)*f.speed*dt;f.group.position.z+=Math.sin(f.dir)*f.speed*dt;const d=Math.hypot(f.group.position.x,f.group.position.z);if(d>39){f.dir=Math.atan2(-f.group.position.z,-f.group.position.x);f.group.position.multiplyScalar(.97);}f.group.rotation.y=-f.dir;f.group.position.y=-.04+Math.sin(time*1.1+f.offset)*.07;f.tail.rotation.y=Math.sin(time*7+f.offset)*.45;}
  for(const c of clouds){c.position.x+=dt*.8;if(c.position.x>150)c.position.x=-150;}
  boatGroup.rotation.z=Math.sin(time*.7)*.018;boatGroup.position.y=.14+Math.sin(time*.9)*.09;

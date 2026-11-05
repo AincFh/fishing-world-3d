@@ -66,4 +66,12 @@ $('sound').onclick=()=>{state.sound=!state.sound;ui();toast(state.sound?'已开�
 $('resultContinue').onclick=()=>{$('catchDialog').close();setPhase('idle','很好的收获。继续抛竿，探索更多鱼群。');};
 $('catchDialog').addEventListener('cancel',e=>{e.preventDefault();$('resultContinue').click()});
 $('start').onclick=()=>{started=true;$('intro').hidden=true;$('game').hidden=false;world.setZone(state.zone);chooseWeather();ui();setPhase('idle','欢迎来到 '+byId(state.zone,ZONES).name+'！试着抛出第一竿。');tone('click');last=performance.now();};
-world.setZone(state.zone);ui();setPhase('idle','抛竿，让旅程从这一刻开始。');
+$('world').addEventListener('fishing:aim',e=>{
+ const d=e.detail;if(phase!=='idle')return;
+ $('hint').textContent='目标已选定 · 约 '+d.distance+' m';
+ notice('已选定湖面抛投点。点击「抛竿」或按空格开始。');
+});
+$('world').addEventListener('fishing:aim-error',()=>{
+ if(phase==='idle')toast('请点按湖面内的水域选择抛投点。');
+});
+world.setZone(state.zone);ui();setPhase('idle','点击湖面选择抛投落点，随后抛竿。');
