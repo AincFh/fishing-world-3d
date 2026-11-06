@@ -1,5 +1,5 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js';
-import {isCastTargetValid} from './logic.js';
+import {isCastTargetValid,getFishingSpot} from './logic.js';
 const random=(()=>{let s=20261105;return()=>{s=(1664525*s+1013904223)>>>0;return s/4294967296;}})();
 const range=(a,b)=>a+(b-a)*random();
 const palette={
@@ -89,6 +89,8 @@ export function createWorld(canvas){
    return false;
   }
   aimPoint.set(point.x,.25,point.z);
+  const spot=getFishingSpot(point.x,point.z);
+  marker.material.color.setHex(spot.id==='deep'?0x91b9f5:spot.id==='reeds'?0x9dddac:0xffe8b0);
   marker.position.set(point.x,.18,point.z);marker.visible=true;
   canvas.dispatchEvent(new CustomEvent('fishing:aim',{detail:{x:point.x,z:point.z,distance:Math.hypot(point.x,point.z).toFixed(1)}}));
   return true;
@@ -102,7 +104,7 @@ export function createWorld(canvas){
  function updateLine(){const ar=lineGeo.attributes.position;ar.setXYZ(0,tipRod.x,tipRod.y,tipRod.z);ar.setXYZ(1,bobberGroup.position.x,bobberGroup.position.y,bobberGroup.position.z);ar.needsUpdate=true;}
  function reset(){phase='idle';bobberGroup.visible=false;line.visible=false;marker.visible=true;}
  function setPhase(value){phase=value;if(value==='bite')ripple(target.x,target.z);}
- function setZone(id){zone=id;aimPoint.set(0,.25,7);marker.position.set(0,.18,7);marker.visible=true;const p=palette[id]||palette.willow;scene.background.setHex(p.sky);scene.fog.color.setHex(p.fog);groundMat.color.setHex(p.grass);waterUniforms.uTint.value.set(...p.water);sun.color.setHex(p.sun);if(id==='dusk')sun.intensity=1.8;else sun.intensity=2.65;}
+ function setZone(id){zone=id;aimPoint.set(0,.25,7);marker.material.color.setHex(0x91b9f5);marker.position.set(0,.18,7);marker.visible=true;const p=palette[id]||palette.willow;scene.background.setHex(p.sky);scene.fog.color.setHex(p.fog);groundMat.color.setHex(p.grass);waterUniforms.uTint.value.set(...p.water);sun.color.setHex(p.sun);if(id==='dusk')sun.intensity=1.8;else sun.intensity=2.65;}
  function setWeather(v){weather=v;rain.visible=v==='rain';sun.intensity=v==='rain'?1.35:zone==='dusk'?1.8:2.65;hemi.intensity=v==='rain'?1.35:2.05;}
  function showCatch(){for(let i=0;i<4;i++)ripple(target.x+range(-1.4,1.4),target.z+range(-1.4,1.4));}
  function setFight(p,t){fighting=p;if(t>.85&&Math.floor(time*5)%2===0)ripple(target.x,target.z);}
