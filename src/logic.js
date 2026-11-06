@@ -40,7 +40,7 @@ copy.lure=copy.owned.includes(input.lure)&&byId(input.lure,SHOP)?.kind==='lure'?
 copy.collection={};copy.records={};for(const f of FISH){const n=input.collection?.[f.id];if(Number.isInteger(n)&&n>0)copy.collection[f.id]=Math.min(n,1e9);const w=input.records?.[f.id];if(Number.isFinite(w)&&w>=f.min&&w<=f.max)copy.records[f.id]=w;}
 const q=input.quest;if(q&&Number.isInteger(q.round)&&q.round>=1&&q.round<=1e6)copy.quest={target:Math.min(100,3+q.round-1),progress:Math.min(Math.max(0,Number(q.progress)||0),3+q.round-1),reward:200+50*q.round,round:q.round};
 copy.sound=input.sound!==false;return copy;}
-export function selectFish(zone='willow',lure='worm',weather='clear',random=Math.random){const options=FISH.filter(f=>f.zone===zone);if(!options.length)return FISH[0];const bonus=byId(lure,SHOP)?.power||0;const weights=options.map(f=>{let w=1/Math.pow(f.rarity,1.9);if(f.rarity>=4)w*=1+bonus*2;if(weather==='rain'&&f.rarity>=2)w*=1.27;return w;});const total=weights.reduce((a,b)=>a+b,0);let roll=Math.max(0,Math.min(.999999,random()))*total;for(let i=0;i<options.length;i++){roll-=weights[i];if(roll<0)return options[i];}return options.at(-1);}
+export function selectFish(zone='willow',lure='worm',weather='clear',random=Math.random,habitat='slope'){const options=FISH.filter(f=>f.zone===zone);if(!options.length)return FISH[0];const bonus=byId(lure,SHOP)?.power||0;const weights=options.map(f=>{let w=habitatWeight(f,habitat)/Math.pow(f.rarity,1.9);if(f.rarity>=4)w*=1+bonus*2;if(weather==='rain'&&f.rarity>=2)w*=1.27;return w;});const total=weights.reduce((a,b)=>a+b,0);let roll=Math.max(0,Math.min(.999999,random()))*total;for(let i=0;i<options.length;i++){roll-=weights[i];if(roll<0)return options[i];}return options.at(-1);}
 export function createCatch(fish,random=Math.random){const weight=+(fish.min+(fish.max-fish.min)*(.12+.88*Math.pow(random(),1.6))).toFixed(2);return{id:fish.id,name:fish.name,weight,rarity:fish.rarity,coins:Math.round(fish.price*(.6+.7*weight/fish.max)),xp:Math.round(fish.xp*(.7+.5*weight/fish.max))};}
 export function landFish(state,fish){const s=sanitize(state);s.coins+=fish.coins;s.xp+=fish.xp;s.caught++;s.totalWeight=+(s.totalWeight+fish.weight).toFixed(2);s.collection[fish.id]=(s.collection[fish.id]||0)+1;const record=(s.records[fish.id]||0)<fish.weight;s.records[fish.id]=Math.max(s.records[fish.id]||0,fish.weight);s.quest.progress++;let questCompleted=false;if(s.quest.progress>=s.quest.target){s.coins+=s.quest.reward;s.xp+=75+s.quest.round*15;const round=s.quest.round+1;s.quest={round,target:Math.min(100,3+round-1),progress:0,reward:200+50*round};questCompleted=true;}return {state:s,record,questCompleted};}
 export function purchase(state,id){const item=byId(id,SHOP);const s=sanitize(state);if(!item)return{ok:false,reason:'装备不存在',state:s};if(s.owned.includes(id))return{ok:false,reason:'已经拥有',state:s};if(level(s.xp)<item.level)return{ok:false,reason:'等级不足',state:s};if(s.coins<item.price)return{ok:false,reason:'金币不足',state:s};s.coins-=item.price;s.owned.push(id);if(item.kind==='rod')s.rod=id;else s.lure=id;return{ok:true,state:s,item};}
@@ -50,3 +50,28 @@ export function fightStep(fight,reeling,dt,rodPower=1,difficulty=1){dt=Math.min(
 const f={...fight};if(reeling){f.progress=Math.min(1,f.progress+dt*(.15*rodPower/Math.max(.6,difficulty)));f.tension=Math.min(1.5,f.tension+dt*(.2*difficulty-.025*rodPower));f.slack=0;}else{f.progress=Math.max(0,f.progress-dt*.012);f.tension=Math.max(.03,f.tension-dt*.34);f.slack+=dt;}
 if(f.tension>=1)f.result='snap';else if(f.slack>12)f.result='escape';else if(f.progress>=1)f.result='caught';return f;}
 export function formatCoins(n){return Math.floor(n).toLocaleString('zh-CN');}
+/** Position-dependent lake ecology. Data is ephemeral; existing saves stay compatible. */
+export const HABITATS=[
+ {id:'reeds',name:'芦苇浅滩',depth:1.7,wait:[1100,2500],rareFactor:.62,fightFactor:.87,description:'水草丰富，咬钩更快'},
+ {id:'slope',name:'湖底缓坡',depth:4.2,wait:[1900,3700],rareFactor:1,fightFactor:1,description:'鱼种均衡，适合常规垂钓'},
+ {id:'deep',name:'深水鱼道',depth:8.4,wait:[3300,6100],rareFactor:1.8,fightFactor:1.18,description:'珍稀鱼更活跃，但更难搏鱼'}
+];
+export function getFishingSpot(x,z){
+ if(!isCastTargetValid(x,z))return null;
+ const d=Math.hypot(x,z);return d>=30?HABITATS[0]:d<=16?HABITATS[2]:HABITATS[1];
+}
+export function biteDelay(id='slope',random=Math.random){
+ const spot=byId(id,HABITATS)||HABITATS[1],n=Number(random());
+ const roll=Number.isFinite(n)?Math.max(0,Math.min(1,n)):.5;
+ return Math.round(spot.wait[0]+(spot.wait[1]-spot.wait[0])*roll);
+}
+const HABITAT_AFFINITY={
+ bluegill:[2.2,1,.45],bass:[1.5,1.25,.85],golden:[.4,1,2.1],
+ trout:[.55,1.4,1.2],perch:[1.8,1.2,.65],salmon:[.45,1,2],
+ catfish:[1.3,1,1.6],sturgeon:[.3,1,2.5],arctic:[.7,1,1.2],moon:[.25,1,2.8]
+};
+export function habitatWeight(fish,habitat='slope'){
+ const index=HABITATS.findIndex(x=>x.id===habitat);
+ const spot=HABITATS[index<0?1:index],affinity=HABITAT_AFFINITY[fish.id];
+ return (affinity?.[index<0?1:index]??1)*(fish.rarity>=4?spot.rareFactor:1);
+}

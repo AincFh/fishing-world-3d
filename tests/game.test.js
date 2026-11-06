@@ -1,5 +1,5 @@
 import test from'node:test';import assert from'node:assert/strict';
-import{newGame,sanitize,level,xpNext,canTravel,FISH,ZONES,SHOP,byId,selectFish,createCatch,landFish,purchase,equip,initialFight,fightStep,formatCoins}from'../src/logic.js';
+import{newGame,sanitize,level,xpNext,canTravel,FISH,ZONES,SHOP,HABITATS,getFishingSpot,biteDelay,habitatWeight,byId,selectFish,createCatch,landFish,purchase,equip,initialFight,fightStep,formatCoins}from'../src/logic.js';
 test('new game is valid and independent',()=>{const a=newGame(),b=newGame();a.owned.push('carbon');assert.equal(b.owned.includes('carbon'),false);assert.equal(a.coins,160)});
 test('level progression and zone unlock',()=>{const s=newGame();assert.equal(level(0),1);assert.equal(xpNext(2),440);assert.equal(canTravel(s,'pine'),false);s.xp=500;assert.equal(canTravel(s,'pine'),true)});
 test('fish and shop tables have unique identifiers',()=>{assert.equal(new Set(FISH.map(f=>f.id)).size,FISH.length);assert.equal(new Set(SHOP.map(x=>x.id)).size,SHOP.length);assert.equal(new Set(ZONES.map(x=>x.id)).size,ZONES.length)});
@@ -21,4 +21,28 @@ test('target casting is bounded to actual lake, excludes dock and invalid input'
  assert.equal(isCastTargetValid(0,35),false);
  assert.equal(isCastTargetValid(NaN,0),false);
  assert.equal(isCastTargetValid(Infinity,1),false);
+});
+
+test('lake depth and coastline produce distinct target habitats',()=>{
+ assert.equal(getFishingSpot(0,7)?.id,'deep');
+ assert.equal(getFishingSpot(22,2)?.id,'slope');
+ assert.equal(getFishingSpot(32,0)?.id,'reeds');
+ assert.equal(getFishingSpot(0,0),null);
+ assert.equal(getFishingSpot(0,35),null);
+ assert.equal(new Set(HABITATS.map(x=>x.id)).size,3);
+});
+test('habitat changes bite timing and difficulty without invalid numbers',()=>{
+ assert.equal(biteDelay('reeds',()=>0),1100);
+ assert.equal(biteDelay('reeds',()=>1),2500);
+ assert.equal(biteDelay('deep',()=>0),3300);
+ assert.ok(biteDelay('deep',()=>.5)>biteDelay('slope',()=>.5));
+ assert.equal(biteDelay('invalid',()=>0),1900);
+ assert.ok(Number.isFinite(biteDelay('deep',()=>NaN)));
+ assert.ok(HABITATS[2].fightFactor>HABITATS[0].fightFactor);
+});
+test('fish species preference changes real catch probability by cast location',()=>{
+ const n=(spot)=>Array.from({length:1000},(_,i)=>selectFish('willow','worm','clear',()=>((i+.5)/1000),spot)).filter(f=>f.id==='golden').length;
+ const reeds=n('reeds'),slope=n('slope'),deep=n('deep');
+ assert.ok(reeds<slope&&slope<deep,`expected increasing rare catches: ${reeds},${slope},${deep}`);
+ assert.equal(habitatWeight(FISH[0],'garbage'),habitatWeight(FISH[0],'slope'));
 });
